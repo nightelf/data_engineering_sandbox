@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+
+# Large data files (provide separately / via download)
+data/*.csv
+data/*.log
+
+# Generated output
+access-log-counts.csv
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/.terraform.lock.hcl
