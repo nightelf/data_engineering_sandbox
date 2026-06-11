@@ -4,10 +4,6 @@
 # IDE
 .idea/
 
-# Large data files (provide separately / via download)
-data/*.csv
-data/*.log
-
 # Generated output
 access-log-counts.csv
 
