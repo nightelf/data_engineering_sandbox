@@ -1,18 +1,40 @@
-# Spark + PostgreSQL Data Engineering Sandbox
+# Spark + PostgreSQL + MongoDB Data Engineering Sandbox
 
 A local data-engineering playground that runs an **Apache Spark** cluster (1 master
-+ 2 workers) and a **PostgreSQL** database in Docker. It's used to experiment with
-distributed data processing in PySpark and to load/query datasets in Postgres.
++ 2 workers), a **PostgreSQL** database, and a **MongoDB** database in Docker. It's
+used to experiment with distributed data processing in PySpark and to load/query
+datasets in Postgres and Mongo.
+
+## Contents
+
+- [Starting the stack](#starting-the-stack)
+- [Access log analysis](#running-the-access-log-analysis)
+- ZIP code data (PostgreSQL)
+  - [Creating the ZIP codes database table](#creating-the-zip-codes-database-table)
+  - [Building the per-state analysis](#building-the-per-state-analysis)
+- Metrics data (MongoDB)
+  - [Generating and loading the metrics dataset](#generating-and-loading-the-metrics-dataset-mongodb)
+  - [Analyzing the metrics dataset](#analyzing-the-metrics-dataset)
+
+## Prerequisites
+
+- **Docker** with the Compose plugin (`docker compose`)
+- *(optional)* **Terraform** + the `kreuzwerker/docker` provider, if you prefer the
+  Terraform provisioning path over docker-compose
+- The source datasets in `data/` (`access.log` and `zip-codes-db.csv`) — these are
+  committed to the repo. `data/metrics.json` is **generated** by a script (below).
 
 ## What's here
 
 | Path | Purpose |
 |------|---------|
-| `docker/docker-compose.yml` | Defines the Spark cluster + Postgres containers |
+| `docker/docker-compose.yml` | Defines the Spark cluster + Postgres + Mongo containers |
 | `terraform/` | Alternate way to provision the same containers via Terraform |
 | `scripts/` | PySpark scripts (mounted into the Spark containers) |
 | `sql/` | SQL scripts (mounted into the Postgres container at `/sql`) |
+| `mongo/` | MongoDB setup scripts (mounted into the Mongo container at `/mongo`) |
 | `data/` | Source datasets (mounted into containers at `/data`) — NGINX access log + ZIP code database |
+| `results/` | CSV outputs written by the analysis scripts |
 
 The whole `spark/` folder is mounted into the Spark containers at
 `/opt/spark/work-dir`, so local edits are immediately visible inside the containers.
@@ -32,11 +54,12 @@ Once running, the UIs are available at:
 - Spark Worker 1: http://localhost:8081
 - Spark Worker 2: http://localhost:8082
 - Postgres: `postgresql://spark:spark@localhost:5432/sparkdb`
+- MongoDB: `mongodb://localhost:27017`
 
 ### Alternative: provisioning with Terraform
 
 The `terraform/` directory provisions the **exact same containers** (Spark master,
-2 workers, and Postgres) as an alternative to docker-compose. It uses the
+2 workers, Postgres, and Mongo) as an alternative to docker-compose. It uses the
 [`kreuzwerker/docker`](https://registry.terraform.io/providers/kreuzwerker/docker)
 provider to talk to the local Docker daemon directly — it does **not** read
 `docker-compose.yml`.
@@ -66,7 +89,7 @@ string as outputs.
 
 `scripts/analyze_access_log.py` parses the NGINX access log in
 `data/access.log` and counts entries grouped by **day, HTTP status code, HTTP
-method, and URL**, writing the result to `access-log-counts.csv`.
+method, and URL**, writing the result to `results/access-log-counts.csv`.
 
 ```bash
 docker exec -e HOME=/root spark-master /opt/spark/bin/spark-submit \
@@ -74,7 +97,7 @@ docker exec -e HOME=/root spark-master /opt/spark/bin/spark-submit \
   /opt/spark/work-dir/scripts/analyze_access_log.py
 ```
 
-Output is written to `access-log-counts.csv` in the project root.
+Output is written to [`results/access-log-counts.csv`](results/access-log-counts.csv).
 
 ## Creating the ZIP codes database table
 
@@ -133,10 +156,66 @@ docker exec -it postgres psql -U spark -d data_engineering \
   -c "SELECT state, number_zip_codes, population, highest_elevation FROM state_zip_codes_analysis ORDER BY population DESC LIMIT 10;"
 ```
 
+A CSV export of the results is available at
+[`results/state_zip_codes_analysis.csv`](results/state_zip_codes_analysis.csv).
+
+## Generating and loading the metrics dataset (MongoDB)
+
+`scripts/generate_metrics.py` generates 100,000 synthetic `click` / `call` /
+`impression` records as a pretty-printed JSON array at `data/metrics.json`.
+`mongo/create_metrics_collection.js` creates a validated `metrics` collection in
+the `analytics` database (a `$jsonSchema` validator enforces `metric_type`,
+`website`, `campaign_id`, `date_time`, and the enum dimension fields).
+
+```bash
+# 1. Generate the data (writes data/metrics.json)
+docker exec -u root -e HOME=/root spark-master \
+  python3 /opt/spark/work-dir/scripts/generate_metrics.py
+
+# 2. Create the validated collection
+docker exec mongo mongosh "mongodb://localhost:27017/analytics" /mongo/create_metrics_collection.js
+
+# 3. Import the data (--jsonArray because the file is a pretty-printed array)
+docker exec mongo mongoimport --db analytics --collection metrics \
+  --jsonArray --file /data/metrics.json
+```
+
+Verify the load (should return 100000):
+
+```bash
+docker exec mongo mongosh "mongodb://localhost:27017/analytics" \
+  --eval "db.metrics.countDocuments()"
+```
+
+> **Tip:** the generated data is intentionally **skewed** (weighted distributions
+> in `generate_metrics.py`) so that group counts have a realistic long-tail spread.
+> Adjust the `*_WEIGHTS` constants at the top of the script to change the shape.
+
+## Analyzing the metrics dataset
+
+`scripts/analyze_metrics.py` reads the `analytics.metrics` collection from MongoDB
+via the Spark Mongo connector, derives a `month` (`yyyy-MM`) bucket from
+`date_time` and a `movie` field from the first path segment of the referrer, then
+groups by **month, campaign_id, metric_type, movie**, counts the rows in each
+group, and orders by `metric_type` then `count`. The result is written to
+`results/metrics-analysis.csv`.
+
+The `--packages` flag downloads the MongoDB Spark Connector (cached after the
+first run), and `-u root` avoids the container's username-resolution error:
+
+```bash
+docker exec -u root -e HOME=/root spark-master /opt/spark/bin/spark-submit \
+  --packages org.mongodb.spark:mongo-spark-connector_2.12:10.4.0 \
+  --conf spark.jars.ivy=/tmp/.ivy2 \
+  /opt/spark/work-dir/scripts/analyze_metrics.py
+```
+
+Output is written to [`results/metrics-analysis.csv`](results/metrics-analysis.csv).
+
 ## Stopping the stack
 
 ```bash
 cd docker
-docker compose down        # stop containers, keep the postgres data volume
-docker compose down -v     # also remove the postgres data volume (clean slate)
+docker compose down        # stop containers, keep the data volumes
+docker compose down -v     # also remove the data volumes (clean slate)
 ```

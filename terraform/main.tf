@@ -22,9 +22,19 @@ resource "docker_image" "postgres" {
   keep_locally = true
 }
 
+resource "docker_image" "mongo" {
+  name         = "mongo:latest"
+  keep_locally = true
+}
+
 # Persistent volume for postgres data
 resource "docker_volume" "postgres_data" {
   name = "postgres-data"
+}
+
+# Persistent volume for mongo data
+resource "docker_volume" "mongo_data" {
+  name = "mongo-data"
 }
 
 # Shared bridge network
@@ -179,6 +189,38 @@ resource "docker_container" "postgres" {
   volumes {
     volume_name    = docker_volume.postgres_data.name
     container_path = "/var/lib/postgresql"
+  }
+
+  networks_advanced {
+    name = docker_network.spark_net.name
+  }
+
+  restart = "unless-stopped"
+}
+
+# MongoDB
+resource "docker_container" "mongo" {
+  name  = "mongo"
+  image = docker_image.mongo.image_id
+
+  ports {
+    internal = 27017
+    external = 27017
+  }
+
+  volumes {
+    host_path      = "${var.spark_workdir}/mongo"
+    container_path = "/mongo"
+  }
+
+  volumes {
+    host_path      = "${var.spark_workdir}/data"
+    container_path = "/data"
+  }
+
+  volumes {
+    volume_name    = docker_volume.mongo_data.name
+    container_path = "/data/db"
   }
 
   networks_advanced {

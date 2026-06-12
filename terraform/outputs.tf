@@ -22,3 +22,8 @@ output "postgres_connection" {
   description = "PostgreSQL connection string"
   value       = "postgresql://spark:spark@localhost:5432/sparkdb"
 }
+
+output "mongo_connection" {
+  description = "MongoDB connection string"
+  value       = "mongodb://localhost:27017"
+}

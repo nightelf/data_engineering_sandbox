@@ -74,8 +74,21 @@ services:
     networks:
       - spark-net
 
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - ../mongo:/mongo
+      - ../data:/data
+      - mongo-data:/data/db
+    networks:
+      - spark-net
+
 volumes:
   postgres-data:
+  mongo-data:
 
 networks:
   spark-net:

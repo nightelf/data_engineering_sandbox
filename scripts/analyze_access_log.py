@@ -50,7 +50,7 @@ counts.show(20, truncate=False)
 
 # Write output CSV using Python directly, bypassing Hadoop filesystem
 import csv
-output_path = "/opt/spark/work-dir/access-log-counts.csv"
+output_path = "/opt/spark/work-dir/results/access-log-counts.csv"
 rows = counts.collect()
 with open(output_path, "w", newline="") as f:
     writer = csv.writer(f)

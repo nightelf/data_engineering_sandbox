@@ -4,9 +4,6 @@
 # IDE
 .idea/
 
-# Generated output
-access-log-counts.csv
-
 # Terraform
 terraform/.terraform/
 terraform/*.tfstate
