@@ -7,7 +7,7 @@ datasets in Postgres and Mongo.
 
 ## Contents
 
-- [Starting the stack](#starting-the-stack)
+- [Starting / Stopping the stack](#starting--stopping-the-stack)
 - [Access log analysis](#running-the-access-log-analysis)
 - ZIP code data (PostgreSQL)
   - [Creating the ZIP codes database table](#creating-the-zip-codes-database-table)
@@ -39,7 +39,7 @@ datasets in Postgres and Mongo.
 The whole `spark/` folder is mounted into the Spark containers at
 `/opt/spark/work-dir`, so local edits are immediately visible inside the containers.
 
-## Starting the stack
+## Starting / Stopping the stack
 
 Using docker-compose (the compose file lives in `docker/`):
 
@@ -56,6 +56,14 @@ Once running, the UIs are available at:
 - Postgres: `postgresql://spark:spark@localhost:5432/sparkdb`
 - MongoDB: `mongodb://localhost:27017`
 
+To stop the stack:
+
+```bash
+cd docker
+docker compose down        # stop containers, keep the data volumes
+docker compose down -v     # also remove the data volumes (clean slate)
+```
+
 ### Alternative: provisioning with Terraform
 
 The `terraform/` directory provisions the **exact same containers** (Spark master,
@@ -69,11 +77,17 @@ cd terraform
 terraform init      # one-time: download the docker provider
 terraform plan      # preview what will be created
 terraform apply     # create the containers
-terraform destroy   # tear everything down
 ```
 
 After `apply`, Terraform prints the same UI URLs and the Postgres connection
 string as outputs.
+
+To stop the stack (the Terraform equivalent of `docker compose down`):
+
+```bash
+cd terraform
+terraform destroy   # remove all containers (the named data volumes persist)
+```
 
 > **Important:** docker-compose and Terraform create containers with the **same
 > names** (`spark-master`, `postgres`, etc.), so only **one** can run at a time.
@@ -211,11 +225,3 @@ docker exec -u root -e HOME=/root spark-master /opt/spark/bin/spark-submit \
 ```
 
 Output is written to [`results/metrics-analysis.csv`](results/metrics-analysis.csv).
-
-## Stopping the stack
-
-```bash
-cd docker
-docker compose down        # stop containers, keep the data volumes
-docker compose down -v     # also remove the data volumes (clean slate)
-```
