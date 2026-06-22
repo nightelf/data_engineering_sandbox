@@ -334,6 +334,17 @@ docker exec -it postgres psql -U spark -d data_engineering -c \
    ORDER BY users_old_id;"
 ```
 
+To export the final `users_new` rows to CSV:
+
+```bash
+docker exec postgres psql -U spark -d data_engineering -c \
+  "COPY (SELECT id, users_old_id, first_name, last_name, email, password_hash, telephone, enabled, migration_dt
+         FROM users_new ORDER BY id) TO STDOUT WITH CSV HEADER" > results/users_new.csv
+```
+
+A sample export is committed at
+[`results/users_new.csv`](results/users_new.csv).
+
 ### Re-running from scratch
 
 Deleting a Debezium connector does **not** clear its stored offsets, so simply
