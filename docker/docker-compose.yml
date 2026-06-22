@@ -61,6 +61,15 @@ services:
   postgres:
     image: postgres:latest
     container_name: postgres
+    # Enable logical replication so Debezium can capture row-level changes.
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_wal_senders=10"
+      - "-c"
+      - "max_replication_slots=10"
     environment:
       - POSTGRES_USER=spark
       - POSTGRES_PASSWORD=spark
@@ -86,9 +95,57 @@ services:
     networks:
       - spark-net
 
+  # Kafka broker in KRaft mode (no Zookeeper needed).
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka
+    ports:
+      - "9092:9092"   # host clients
+    environment:
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:29093
+      - KAFKA_LISTENERS=PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+      - CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - spark-net
+
+  # Kafka Connect with the Debezium Postgres connector pre-installed.
+  kafka-connect:
+    image: debezium/connect:2.7.3.Final
+    container_name: kafka-connect
+    depends_on:
+      - kafka
+      - postgres
+    ports:
+      - "8083:8083"   # Connect REST API
+    environment:
+      - BOOTSTRAP_SERVERS=kafka:29092
+      - GROUP_ID=connect-cluster
+      - CONFIG_STORAGE_TOPIC=connect_configs
+      - OFFSET_STORAGE_TOPIC=connect_offsets
+      - STATUS_STORAGE_TOPIC=connect_statuses
+      - CONFIG_STORAGE_REPLICATION_FACTOR=1
+      - OFFSET_STORAGE_REPLICATION_FACTOR=1
+      - STATUS_STORAGE_REPLICATION_FACTOR=1
+    volumes:
+      - ../kafka:/kafka-config
+    networks:
+      - spark-net
+
 volumes:
   postgres-data:
   mongo-data:
+  kafka-data:
 
 networks:
   spark-net:

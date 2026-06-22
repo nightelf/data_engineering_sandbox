@@ -15,6 +15,10 @@ datasets in Postgres and Mongo.
 - Metrics data (MongoDB)
   - [Generating and loading the metrics dataset](#generating-and-loading-the-metrics-dataset-mongodb)
   - [Analyzing the metrics dataset](#analyzing-the-metrics-dataset)
+- [User migration via Kafka CDC](#user-migration-via-kafka-cdc)
+  - [Tables](#tables) and [migration transform](#migration-transform)
+  - [Running the migration](#1-create-the-tables-and-seed-the-data) (steps 1–4)
+  - [Re-running from scratch](#re-running-from-scratch)
 
 ## Prerequisites
 
@@ -33,6 +37,7 @@ datasets in Postgres and Mongo.
 | `scripts/` | PySpark scripts (mounted into the Spark containers) |
 | `sql/` | SQL scripts (mounted into the Postgres container at `/sql`) |
 | `mongo/` | MongoDB setup scripts (mounted into the Mongo container at `/mongo`) |
+| `kafka/` | Debezium connector config + registration script for the CDC pipeline |
 | `data/` | Source datasets (mounted into containers at `/data`) — NGINX access log + ZIP code database |
 | `results/` | CSV outputs written by the analysis scripts |
 
@@ -225,3 +230,122 @@ docker exec -u root -e HOME=/root spark-master /opt/spark/bin/spark-submit \
 ```
 
 Output is written to [`results/metrics-analysis.csv`](results/metrics-analysis.csv).
+
+## User migration via Kafka CDC
+
+This pipeline migrates users from a legacy `users_old` table into a modern
+`users_new` table and keeps them in sync using **change data capture (CDC)**:
+
+```
+Postgres (users_old)  ->  Debezium / Kafka Connect  ->  Kafka topic  ->  PySpark Structured Streaming  ->  Postgres (users_new)
+```
+
+### Tables
+
+`sql/create_users_tables.sql` drops and recreates both tables for a clean start,
+then seeds them:
+
+- **`users_old`** (legacy) — `id`, `first_name`, `last_name`, `email`,
+  `username`, `password_hash`, `salt`, `telephone`. Seeded with **20 users**.
+- **`users_new`** (modern) — its own auto-increment `id`, a unique
+  **`users_old_id`** that links back to the source row (the CDC match key),
+  `email` as the identity (no `username`), a nullable `password_hash` (no
+  `salt`), `enabled` (defaults to **`TRUE`**), and `migration_dt`. Seeded with
+  **10 native users** that pre-date the migration — each has a **bcrypt**
+  password (`crypt(... , gen_salt('bf'))` via the `pgcrypto` extension),
+  `migration_dt` left `NULL`, and `users_old_id` `NULL`.
+
+### Migration transform
+
+Debezium first takes an **initial snapshot** of `users_old` (migrating the 20
+seeded rows), then streams every subsequent `INSERT` / `UPDATE` / `DELETE`. The
+PySpark job applies the same transform on both phases, keyed on `users_old_id`
+so an updated source row UPDATEs the matching `users_new` row (not a duplicate):
+
+- `email` becomes the identity (`username` is dropped)
+- `salt` is dropped and `password_hash` is **not** migrated (left `NULL`)
+- `enabled` is **`true`** — migrated users are active so they can sign in and
+  create a new password (their `password_hash` is `NULL` until they do)
+- `migration_dt` is stamped with the time Spark processed the change
+- the upsert only touches the migrated columns, so a later edit to `users_old`
+  will not overwrite a `password_hash` / `enabled` already set in `users_new`
+
+### 1. Create the tables and seed the data
+
+```bash
+docker exec -it postgres psql -U spark -d data_engineering -f /sql/create_users_tables.sql
+```
+
+This leaves `users_old` with 20 rows and `users_new` with the 10 native users.
+
+### 2. Register the Debezium connector
+
+With the stack running (it now includes `kafka` and `kafka-connect`), register
+the connector that watches `data_engineering.public.users_old`:
+
+```bash
+sh kafka/register-connector.sh
+```
+
+This posts `kafka/users-connector.json` to the Kafka Connect REST API on
+`localhost:8083` and prints the connector status.
+
+### 3. Start the streaming migration job
+
+The `--packages` flag pulls the Spark Kafka and PostgreSQL JDBC connectors, and
+`-u root` avoids the container's username-resolution error. The job runs
+continuously — leave it running in a terminal:
+
+```bash
+docker exec -u root -e HOME=/root spark-master /opt/spark/bin/spark-submit \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.4.0,org.postgresql:postgresql:42.7.4 \
+  --conf spark.jars.ivy=/tmp/.ivy2 \
+  /opt/spark/work-dir/scripts/migrate_users_stream.py
+```
+
+Within a few seconds the 20 snapshot rows are migrated, so `users_new` holds
+**30** rows (10 native + 20 migrated):
+
+```bash
+docker exec -it postgres psql -U spark -d data_engineering -c \
+  "SELECT count(*) FILTER (WHERE users_old_id IS NULL)     AS native,
+          count(*) FILTER (WHERE users_old_id IS NOT NULL) AS migrated,
+          count(*)                                         AS total
+   FROM users_new;"
+```
+
+### 4. Make changes and watch them sync
+
+`sql/modify_users_old.sql` exercises the pipeline by updating 5 rows, inserting
+2, and deleting 1. With the streaming job running, run it and the changes
+propagate to `users_new` automatically:
+
+```bash
+docker exec -it postgres psql -U spark -d data_engineering -f /sql/modify_users_old.sql
+```
+
+Verify the changes reached `users_new` (e.g. the updated email and the 2 new
+users appear, the deleted user is gone):
+
+```bash
+docker exec -it postgres psql -U spark -d data_engineering -c \
+  "SELECT users_old_id, email, telephone, enabled FROM users_new
+   WHERE email IN ('emma.dawson2@example.com','priya.anand@example.com','marcus.webb@example.com')
+   ORDER BY users_old_id;"
+```
+
+### Re-running from scratch
+
+Deleting a Debezium connector does **not** clear its stored offsets, so simply
+re-registering it will skip the snapshot. To start the migration over cleanly
+(after re-running `create_users_tables.sql`), reset the connector's offsets so it
+re-snapshots:
+
+```bash
+curl -X PUT    http://localhost:8083/connectors/users-old-connector/stop
+curl -X DELETE http://localhost:8083/connectors/users-old-connector/offsets
+curl -X PUT    http://localhost:8083/connectors/users-old-connector/resume
+```
+
+Then delete the streaming checkpoint (`/tmp/users-cdc-checkpoint` in the
+`spark-master` container) and restart the job from step 3.
