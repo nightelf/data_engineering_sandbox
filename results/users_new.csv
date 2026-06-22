@@ -1,0 +1,32 @@
+id,users_old_id,first_name,last_name,email,password_hash,telephone,enabled,migration_dt
+1,,Aria,Whitfield,aria.whitfield@example.com,$2a$06$IhiP7KoRrsz/KF.gI1.jfO6vTPlbkcsGKVim/QOKx9i9kJYnOpNke,555-0201,t,
+2,,Caleb,Mercer,caleb.mercer@example.com,$2a$06$y8yhsVjl4dAEh074ld9AC.aI4M3crmKcWB7GH39t1MRsDcsrbWZXW,555-0202,t,
+3,,Nora,Sullivan,nora.sullivan@example.com,$2a$06$4KW4EI4OBWWSkEcvnXiKOeumWqHRLzQYIp1bKw5FBfZ/Ge6HDLc3i,555-0203,t,
+4,,Felix,Barros,felix.barros@example.com,$2a$06$QEiE5KlhZ/SNo4vqleHzK.B.45HlPxiR0wGTdZnv0U1D7FWCEdN4.,555-0204,t,
+5,,Ruby,Castellano,ruby.castellano@example.com,$2a$06$E4x1dN4qm.v4vKANmTbya.cXJaiEv7gk0YBTQPxw38waCcpgINPnm,555-0205,t,
+6,,Theo,Nakamura,theo.nakamura@example.com,$2a$06$8i19.2nEr4Sau.v4QT9MO.4VlxOkPN2LsJcDcCRFg4a2AhK.amg/K,555-0206,t,
+7,,Iris,Delacroix,iris.delacroix@example.com,$2a$06$WFsxOjBbsQY9tNINkZ.OBupxOscl8YAQ9nXpc.DBdgAC48.zT79Ii,555-0207,t,
+8,,Oscar,Pennington,oscar.pennington@example.com,$2a$06$nReZ6vU0KhwbDYfspeZGueOSYlVL/.hdFgz0tNuMZLD4Ee3vz.R/W,555-0208,t,
+9,,Lena,Vasquez,lena.vasquez@example.com,$2a$06$tGco4dXYGxcPaOomdOg3keFHdbKj6akk6odL6/c29zX02W7olqGEG,555-0209,t,
+10,,Milo,Ashford,milo.ashford@example.com,$2a$06$Ua4syze2ld47i87g998SO.nnOk5ngQB/254Oa74qgMgxbrstXi4Iy,555-0210,t,
+11,1,Olivia,Bennett,olivia.bennett@example.com,,555-9001,t,2026-06-21 22:06:43.471295
+12,2,Liam,Carter-Reyes,liam.carter@example.com,,555-0102,t,2026-06-21 22:06:43.471295
+13,3,Emma,Dawson,emma.dawson2@example.com,,555-0103,t,2026-06-21 22:06:43.471295
+14,4,Noah,Ellis,noah.ellis@example.com,,555-9004,t,2026-06-21 22:06:43.471295
+15,5,Ava-Marie,Foster,ava.foster@example.com,,555-0105,t,2026-06-21 22:06:43.471295
+16,6,Ethan,Grant,ethan.grant@example.com,,555-0106,t,2026-06-21 22:06:43.471295
+17,7,Sophia,Hayes,sophia.hayes@example.com,,555-0107,t,2026-06-21 22:06:43.471295
+18,8,Mason,Irwin,mason.irwin@example.com,,555-0108,t,2026-06-21 22:06:43.471295
+19,9,Isabella,Jensen,isabella.jensen@example.com,,555-0109,t,2026-06-21 22:06:43.471295
+20,10,Lucas,Klein,lucas.klein@example.com,,555-0110,t,2026-06-21 22:06:43.471295
+21,11,Mia,Lawson,mia.lawson@example.com,,555-0111,t,2026-06-21 22:06:43.471295
+22,12,James,Morgan,james.morgan@example.com,,555-0112,t,2026-06-21 22:06:43.471295
+23,13,Charlotte,Nash,charlotte.nash@example.com,,555-0113,t,2026-06-21 22:06:43.471295
+24,14,Benjamin,Owens,benjamin.owens@example.com,,555-0114,t,2026-06-21 22:06:43.471295
+25,15,Amelia,Patel,amelia.patel@example.com,,555-0115,t,2026-06-21 22:06:43.471295
+27,17,Harper,Reed,harper.reed@example.com,,555-0117,t,2026-06-21 22:06:43.471295
+28,18,Alexander,Sims,alexander.sims@example.com,,555-0118,t,2026-06-21 22:06:43.471295
+29,19,Evelyn,Turner,evelyn.turner@example.com,,555-0119,t,2026-06-21 22:06:43.471295
+30,20,Daniel,Vance,daniel.vance@example.com,,555-0120,t,2026-06-21 22:06:43.471295
+36,21,Priya,Anand,priya.anand@example.com,,555-0301,t,2026-06-21 22:07:06.777514
+37,22,Marcus,Webb,marcus.webb@example.com,,555-0302,t,2026-06-21 22:07:06.777514
